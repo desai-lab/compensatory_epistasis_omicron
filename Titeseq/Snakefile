@@ -1,0 +1,235 @@
+"""snakemake file that runs analysis
+
+Started by Jeffrey Chang
+"""
+
+import pandas as pd
+from glob import glob
+import os
+
+# -------------
+# Config
+# -------------
+
+configfile: 'metadata/config.yaml'
+
+sample_table = pd.read_table(config["sample_table_filename"], index_col='sample_name')
+replicate_table = pd.read_table(config["replicate_table_filename"]).set_index('replicate')
+
+sample_table["flow_file"] = sample_table.apply(
+            lambda r:
+            os.path.join(
+                 config["cytometry_data_dir"],
+                 replicate_table['cytometry_data_subdir'][r['replicate']],
+                 f'export_Sorted_%s%s_%s%s%d.csv' % (
+                     r['construct'],
+                     r['replicate'],
+                     r['concentration'] if r['concentration'] != "F" else "",
+                     "_PE" if r["concentration"] != "F" else "mycFITC_FITC",
+                     int(r['bin'])
+                     ))
+            if r["concentration"] != "unsorted"
+            else "",
+            axis=1).to_list()
+
+result = 'results_' + config['experiment_name']
+
+samples = sample_table.index
+replicates = replicate_table.index
+replicates_with_expression_sort = list(sample_table[sample_table['concentration'] == 'F']['replicate'].unique())
+constructs = replicate_table['construct'].unique()
+solutes = replicate_table['solute'].unique()
+
+def lanes_fastq_filename(wc):
+    sample_id = int(sample_table['sample_id'][wc.sample])
+    replicate = sample_table['replicate'][wc.sample]
+    filename = os.path.join(
+        config['sequencing_data_dir'],
+        replicate_table['sequencing_data_subdir'][replicate],
+        f'{wc.sample}_S{sample_id}_L00?_R{wc.read}_001.fastq.gz'
+    )
+    return glob(filename)
+
+def get_col_inline_index(wildcards):
+    index_no = sample_table.loc[wildcards.sample]['col_i']
+    return config['col_inline_indices'][index_no - 1]
+
+
+def get_row_inline_index(wildcards):
+    index_no = sample_table.loc[wildcards.sample]['row_i']
+    return config['row_inline_indices'][index_no - 1]
+
+
+def get_all_sample_table_entries_for_replicate(wildcards):
+    return sample_table[(sample_table.replicate == wildcards.replicate)
+                        & (sample_table.construct == wildcards.construct)]
+
+
+def get_all_replicates_of_solute(wildcards):
+    return list(replicate_table[(replicate_table['solute'] == wildcards.solute) &
+                                (replicate_table['construct'] == wildcards.construct)].index)
+
+
+def get_Kd_tsv_for_all_replicates_of_solute(wildcards):
+    return expand(rules.compute_Kds.output.tsv, 
+                  replicate=get_all_replicates_of_solute(wildcards),
+                  construct=wildcards.construct)
+
+def get_Kd_tsv_for_all_replicates_with_expression_sort(wildcards):
+    return expand(rules.compute_Kds.output.tsv, 
+                  replicate=replicates_with_expression_sort,
+                  construct=wildcards.construct)
+
+# -------------
+# Rules
+# -------------
+
+rule all:
+    input:
+        result + '/stats/fastq_stats.tsv',
+        result + '/stats/indexing_stats.tsv',
+        result + '/stats/geno_stats.tsv',
+        result + '/stats/count_stats.tsv',
+        expand(result + '/Kds/cleaned_Kds_{construct}_{solute}.tsv',
+                construct=constructs, solute=solutes),
+        expand(result + '/Kds/cleaned_expression_{construct}.tsv',
+                construct=replicate_table.construct.unique())
+
+rule validate_mutations:
+    output: mutation_list=result + '/mutation_list.tsv'
+    conda: 'environment.yaml'
+    script: 'scripts/validate_mutations.py'
+
+rule generate_regexes:
+    input : mutation_list=result + '/mutation_list.tsv'
+    output:
+        read_1_regex=result + '/regexes/read_1_regex.txt',
+        read_2_regex=result + '/regexes/read_2_regex.txt',
+        geno_for_regex=result + '/regexes/geno_for_regex.txt',
+        geno_rev_regex=result + '/regexes/geno_rev_regex.txt'
+    conda: 'environment.yaml'
+    script: 'scripts/generate_regex.py'
+
+rule concat_lanes:
+    input: lanes_fastq_filename
+    output: result + '/grouped_fastq/{sample}_R{read}.fastq.gz'
+    shell: 'cat {input} > {output}'
+
+rule parse_fastqs:
+    input:
+        read_1_fastq=result + '/grouped_fastq/{sample}_R1.fastq.gz',
+        read_2_fastq=result + '/grouped_fastq/{sample}_R2.fastq.gz',
+        read_1_regex=result + '/regexes/read_1_regex.txt',
+        read_2_regex=result + '/regexes/read_2_regex.txt'
+    output:
+        tsv=result + '/parsed_fastq/{sample}.tsv',
+        stats=result + '/parsed_fastq/{sample}_stats.tsv'
+    conda: 'environment.yaml'
+    script: 'scripts/parse_fastqs.py'
+
+rule collate_fastq_stats:
+    input: stats=expand(rules.parse_fastqs.output.stats, sample=samples)
+    output: stats=result + '/stats/fastq_stats.tsv'
+    script: 'scripts/collate_stats.py'
+
+rule parse_indices:
+    input:
+        tsv=rules.parse_fastqs.output.tsv
+    params:
+        col_inline_idx=get_col_inline_index,
+        row_inline_idx=get_row_inline_index
+    output:
+        tsv=result + '/indexed_fastq/{sample}.tsv',
+        stats=result + '/indexed_fastq/{sample}_stats.tsv'
+    conda: 'environment.yaml'
+    script: 'scripts/parse_indices.py'
+
+rule collate_index_stats:
+    input: stats=expand(rules.parse_indices.output.stats, sample=samples)
+    output: stats=result + '/stats/indexing_stats.tsv'
+    script: 'scripts/collate_stats.py'
+
+rule parse_genotype:
+    input:
+        tsv=rules.parse_indices.output.tsv,
+        geno_for_regex=result + '/regexes/geno_for_regex.txt',
+        geno_rev_regex=result + '/regexes/geno_rev_regex.txt',
+        mutation_list=result + '/mutation_list.tsv'
+    output:
+        tsv=result + '/genotypes/{sample}.tsv',
+        bad_reads=result + '/genotypes/{sample}_rejected_reads.tsv.gz',
+        stats=result + '/genotypes/{sample}_stats.tsv'
+    conda: 'environment.yaml'
+    script: 'scripts/parse_genotype.py'
+
+rule collate_geno_stats:
+    input: stats=expand(rules.parse_genotype.output.stats, sample=samples)
+    output: stats=result + '/stats/geno_stats.tsv'
+    script: 'scripts/collate_stats.py'
+
+rule deduplicate_UMIs_and_count:
+    input: tsv=rules.parse_genotype.output.tsv
+    output:
+        tsv=result + '/counts/{sample}.tsv',
+        stats=result + '/counts/{sample}_stats.tsv'
+    conda: 'environment.yaml'
+    script: 'scripts/count_UMIs.py'
+
+rule collate_count_stats:
+    input: stats=expand(rules.deduplicate_UMIs_and_count.output.stats, sample=samples)
+    output: stats=result + '/stats/count_stats.tsv'
+    script: 'scripts/collate_stats.py'
+
+rule assemble_count_table:
+    input: tsv=expand(result + '/counts/{sample}.tsv', sample=samples)
+    params: samples=samples
+    output: tsv=result + '/count_table.tsv'
+    conda: 'environment.yaml'
+    script: 'scripts/assemble_count_table.py'
+
+rule fluorescence:
+    params:
+        sample_table=sample_table
+    output:
+        tsv=result + '/fluorescence.tsv'
+    conda: 'environment.yaml'
+    script: 'scripts/flow.py'
+
+rule compute_Kds:
+    input:
+        count_table=rules.assemble_count_table.output.tsv,
+        fluorescence=rules.fluorescence.output.tsv,
+    params:
+        sample_info = get_all_sample_table_entries_for_replicate
+    output:
+        tsv=result + '/Kds/Kds_{construct}{replicate}.tsv',
+        plot_test_curve=result + '/Kds/plots/test_curves_{construct}{replicate}.pdf',
+        plot_Kd_distribution=result + '/Kds/plots/Kd_distribution_{construct}{replicate}.pdf',
+        plot_fluo_distribution=result + '/Kds/plots/fluo_distribution_{construct}{replicate}.pdf',
+        plot_corr_Kd_error=result + '/Kds/plots/corr_Kd_error_{construct}{replicate}.pdf',
+        plot_corr_fluo_Kd=result + '/Kds/plots/corr_fluo_Kd_{construct}{replicate}.pdf'
+    conda: 'environment.yaml'
+    script: 'scripts/kd_inference.py'
+
+rule merge_replicates:
+    input:
+        tsv= get_Kd_tsv_for_all_replicates_of_solute
+    params:
+        replicate_names = get_all_replicates_of_solute
+    output:
+        tsv=result + '/Kds/cleaned_Kds_{construct}_{solute}.tsv',
+        plot_replicate_comparison = result + '/Kds/plots/replicate_comparison_{construct}_{solute}.pdf',
+        plot_comparison_errors = result + '/Kds/plots/comparison_errors_{construct}_{solute}.pdf',
+    conda: 'environment.yaml'
+    script: 'scripts/merge_replicates.py'
+
+rule merge_expression:
+     input:
+         tsv=get_Kd_tsv_for_all_replicates_with_expression_sort
+     params:
+         replicate_names=replicates_with_expression_sort
+     output:
+         tsv=result + '/Kds/cleaned_expression_{construct}.tsv',
+         plot_replicate_comparison_expr = result + '/Kds/plots/expr_replicate_comparison_{construct}.pdf'
+     conda: 'environment.yaml'
+     script: 'scripts/merge_expression.py'

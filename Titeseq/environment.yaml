@@ -1,0 +1,19 @@
+name: omicron
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+
+dependencies:
+  - mamba
+  - pandas=1.4.1
+  - python=3.8
+  - snakemake=7.1.1
+  - jupyterlab>=3
+  - biopython>=1.76
+  - regex>=2021.11.10
+  - seaborn=0.11.2
+  - matplotlib=3.5.1
+  - scipy=1.5.2
+  - scikit-learn
+  - statsmodels

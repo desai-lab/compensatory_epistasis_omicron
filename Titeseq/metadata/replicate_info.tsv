@@ -1,0 +1,12 @@
+replicate	solute	sequencing_data_subdir	cytometry_data_subdir	collection_date	construct
+a	ACE2	RBD_ab	RBDa	2/22/2022	RBD
+b	ACE2	RBD_ab	RBDb	3/3/2022	RBD
+x	ACE2	RBD_dhjx	RBDx	4/14/2022	RBD
+c	S309	RBD_ecgiv	RBDc	3/31/2022	RBD
+d	S309	RBD_dhjx	RBDd	4/7/2022	RBD
+e	CoV555	RBD_ecgiv	RBDe	3/28/2022	RBD
+v	CoV555	RBD_ecgiv	RBDv	4/15/2022	RBD
+g	REGN10987	RBD_ecgiv	RBDg	4/1/2022	RBD
+h	REGN10987	RBD_dhjx	RBDh	4/11/2022	RBD
+i	CB6	RBD_ecgiv	RBDi	4/4/2022	RBD
+j	CB6	RBD_dhjx	RBDj	4/13/2022	RBD

@@ -1,0 +1,7 @@
+# cluster configuration for running Snakefile on the cluster
+
+__default__:
+  cpus: 1
+  time: 1-0
+  name: "{rule}"
+  memory: 4G

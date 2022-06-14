@@ -1,0 +1,112 @@
+# CONFIG FILE
+
+# Name of the experiment (a name for the results folder)
+experiment_name: RBD_abcdeghijvx
+
+# Directory where sequencing data is stored (see README for details)
+sequencing_data_dir: /n/holyscratch01/desai_lab/omicron/NGS_data/
+cytometry_data_dir: /n/desai_lab/everyone/omicron/facs_data/gate_events/
+
+# Metadata files (see README for details)
+sample_table_filename: metadata/sample_info.tsv
+replicate_table_filename: metadata/replicate_info.tsv
+
+# --------------------------
+# Sequence info
+# --------------------------
+
+# Provide the ancestral '0' sequence and the evolved '1' sequence, in this case
+# the SARS-Cov-2 Wuhan-1 and omicron spike RBD. This is not the amplicon, but rather
+# just the sequence of the gene of interest. The amino acid numbering starts at the
+# specified residue number below.
+sequence_begins_with_residue: 331
+ancestral_seq: |
+    AACATAACAAACTTATGCCCCTTTggaGAAGTATTTAATGCTACTAGATTCGCATCGGTTTATGCCTGGAATAGAAAGAGGATCAGTAACTGCGTTGCTGATTATTCTGTTTTGTATAACtcgGCCtcgTTCtcgACATTTAAGTGCTACGGGGTCTCGCCTACCAAATTAAACGATTTATGCTTCACCAATGTGTACGCCGATTCTTTTGTGATCAGGGGTGACGAAGTTAGACAGATCGCTCCAGGGCAAACTGGTaagATTGCCGATTACAACTACAAGCTTCCAGACGACTTCACTGGTTGCGTAATAGCATGGAACTCAAACaacTTAGACTCAAAGGTGggaGGAAATTATAACTACCTGTACCGTCTTTTCAGGAAATCAAATTTGAAGCCGTTCGAAAGGGACATCTCCACGGAGATATATCAGGCCGGTtcaacaCCCTGCAATGGCGTCgagGGCTTCAACTGTTACTTCCCCCTAcagTCATACggtTTCcagCCTACAaacGGAGTTGGCtacCAGCCATACAGAGTTGTGGTTTTATCTTTCGAGTTGTTGCACGCCCCTGCTACGGTTTGTGGTCCTAAGAAGTCCACT
+descendant_seq: |
+    AACATAACAAACTTATGCCCCTTTGACGAAGTATTTAATGCTACTAGATTCGCATCGGTTTATGCCTGGAATAGAAAGAGGATCAGTAACTGCGTTGCTGATTATTCTGTTTTGTATAACCTGGCCCCTTTCTTCACATTTAAGTGCTACGGGGTCTCGCCTACCAAATTAAACGATTTATGCTTCACCAATGTGTACGCCGATTCTTTTGTGATCAGGGGTGACGAAGTTAGACAGATCGCTCCAGGGCAAACTGGTAATATTGCCGATTACAACTACAAGCTTCCAGACGACTTCACTGGTTGCGTAATAGCATGGAACTCAAACAAGTTAGACTCAAAGGTGTCAGGAAATTATAACTACCTGTACCGTCTTTTCAGGAAATCAAATTTGAAGCCGTTCGAAAGGGACATCTCCACGGAGATATATCAGGCCGGTAACAAGCCCTGCAATGGCGTCGCCGGCTTCAACTGTTACTTCCCCCTAAGGTCATACTCTTTCAGGCCTACATACGGAGTTGGCCATCAGCCATACAGAGTTGTGGTTTTATCTTTCGAGTTGTTGCACGCCCCTGCTACGGTTTGTGGTCCTAAGAAGTCCACT
+
+# The pipeline automatically detects the mutations present in the gene sequences,
+# but for good measure, they are explicitly listed here. The scripts will throw
+# an error if this information is not consistent
+mutation_names: [ G339D, S371L, S373P, S375F, K417N, N440K, G446S, S477N, T478K, E484A, Q493R, G496S, Q498R, N501Y, Y505H ]
+num_mutations: 15
+
+# Some of the mutations are also `synomously encoded' at other residue positions
+# so that they lie in the illumina read part of the amplicon. In this case
+synonymously_coded_mutations:
+    - mutation_name: K417N
+      synonomous_position: 378
+      codon_0: AAG
+      codon_1: AAA
+
+# --------------------------
+# Primers and NGS sequencing
+# --------------------------
+
+num_mutations_on_forward_read: 5
+# The part of the forward primer which anneals to the plasmid
+foward_read_annealing_seq: GGTCGGCTAGCCATATGAAC
+# Number of bp between 5' end of gene sequence and 5' end of the annealing primer sequence
+# Negative means amplicon starts before gene, positive means after
+forward_read_starting_offset: -17
+
+
+num_mutations_on_reverse_read: 10
+# The reverse complement of the part of the reverse primer which anneals to plasmid
+reverse_read_annealing_seq: GATAAAACCACAACTCTGTATGGC
+# Number of bp between 3' end of annealing sequence and the 3' end of gene sequence
+# Negative means amplicon ends after gene, positive means before
+reverse_read_starting_offset: 52
+
+umi_length: 8
+
+row_inline_indices:
+    - TACCTGA
+    - AGAACCAT
+    - ACCGTTGAC
+    - GCAAGCTGTT
+    - TCGGTGGTACG
+    - GTTCAACCGATT
+    - CGTACAA
+    - GAGATCAC
+
+col_inline_indices:
+    - TTGATCG
+    - CATTCTCGAG
+    - CCTTAGTACTA
+    - AGTGGAATACCT
+    - GGTATCA
+    - GATGTCCT
+    - CTCATCCAG
+    - GACGGAACTC
+    - ATCGCAGGCAT
+    - TCACGACTAGTA
+
+# --------------------------
+# Data processing
+# --------------------------
+
+debug_mode: False
+max_reads_per_file_if_debugging: 50
+
+num_substitutions_tolerated_in_inline_idx: 2
+num_substitutions_tolerated_per_ten_bp: 1
+are_indels_tolerated_in_primers: True
+
+# parameters for the Kd inference
+bounds_log10Kd_min: -14
+bounds_log10Kd_max: -5
+bounds_A_min: 100
+bounds_A_max: 1000000
+bounds_B_min: 1
+bounds_B_max: 100000
+min_number_counts: 50
+
+# parameters for the Kd cleanup
+sigma_max: 1
+r2_min: 0.8
+max_log10Kd: 13
+min_log10Kd: 5
+
+# The plotting codes often throw bugs so here's a flag to just skip it
+do_plots: True

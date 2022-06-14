@@ -1,0 +1,4 @@
+replicate	solute	sequencing_data_subdir	cytometry_data_subdir
+a	H1	ch65a/	ch65a/
+b	H1	ch65bc/	ch65b/
+c	H1	ch65bc/	ch65c/
