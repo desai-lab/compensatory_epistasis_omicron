@@ -23,7 +23,7 @@ df = pd.read_csv(snakemake.input.count_table, sep="\t")
 df["geno"] = df.geno.apply(lambda x: f"{int(x):0{conf['num_mutations']}d}")
 # reading in fluorescence data
 fluor = pd.read_csv(snakemake.input.fluorescence, sep="\t")
-
+fluor = fluor[fluor.replicate == replicate]
 
 def mean_expression(sample_info, fluor, df):
     sample_info = sample_info[sample_info.concentration == 'F'].copy()
